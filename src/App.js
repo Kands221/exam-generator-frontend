@@ -538,8 +538,8 @@ function App() {
                               display: 'flex',
                               alignItems: 'center'
                             }}>
-                              <Clear color="error" sx={{ mr: 1 }} />
-                              <Typography variant="body1" color="error.dark">
+                              <Clear sx={{ mr: 1, color: 'white' }} />
+                              <Typography variant="body1" sx={{ color: 'white' }}>
                                 Incorrect. The correct answer is: {question.correct_answer}
                               </Typography>
                             </Box>
