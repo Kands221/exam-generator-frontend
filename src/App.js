@@ -274,7 +274,7 @@ function App() {
               <School sx={{ fontSize: 40, color: 'primary.main' }} />
             </IconButton>
             <Typography variant="h3" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
-              AI Exam Generator
+              SmartStudy:AI Exam Generator
             </Typography>
             <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
               Transform your PDF documents into interactive multiple-choice questions
