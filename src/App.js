@@ -75,6 +75,10 @@ const UploadZone = styled(Paper)(({ theme }) => ({
     borderColor: theme.palette.primary.main,
     transform: 'translateY(-2px)',
   },
+  '&.dragover': {
+    borderColor: theme.palette.primary.main,
+    backgroundColor: theme.palette.action.hover,
+  }
 }));
 
 const QuestionCard = styled(Card)(({ theme }) => ({
@@ -86,26 +90,81 @@ const QuestionCard = styled(Card)(({ theme }) => ({
   },
 }));
 
+const StyledButton = styled(Button)(({ theme }) => ({
+  '&.Mui-disabled': {
+    cursor: 'not-allowed',
+    pointerEvents: 'auto'
+  }
+}));
+
 function App() {
   const [file, setFile] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [userAnswers, setUserAnswers] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [rateLimitInfo, setRateLimitInfo] = useState(null);
+  const [questionType, setQuestionType] = useState('multiple_choice');
   const [score, setScore] = useState(null);
   const [submitted, setSubmitted] = useState(false);
-  const [questionType, setQuestionType] = useState('multiple_choice');
-  const [rateLimit, setRateLimit] = useState(null);
+
+  const MAX_FILE_SIZE = 1000 * 1024; // 1000KB in bytes
+
+  const validateFile = (file) => {
+    if (!file) return 'Please select a file first';
+    if (file.type !== 'application/pdf') return 'Please select a valid PDF file';
+    if (file.size > MAX_FILE_SIZE) return `File size must be less than ${MAX_FILE_SIZE / 1024}KB`;
+    return null;
+  };
+
+  const areAnswersComplete = () => {
+    if (!questions.length) return false;
+    return questions.every((question, index) => 
+      userAnswers[index] !== undefined && userAnswers[index] !== null && userAnswers[index] !== ''
+    );
+  };
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
-    if (selectedFile && selectedFile.type === 'application/pdf') {
+    const error = validateFile(selectedFile);
+    
+    if (error) {
+      setError(error);
+      setFile(null);
+    } else {
       setFile(selectedFile);
       setError(null);
-    } else {
-      setError('Please select a valid PDF file');
-      setFile(null);
     }
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const droppedFile = event.dataTransfer?.files[0];
+    const error = validateFile(droppedFile);
+    
+    if (error) {
+      setError(error);
+      setFile(null);
+    } else {
+      setFile(droppedFile);
+      setError(null);
+    }
+    
+    event.target.classList.remove('dragover');
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.target.classList.add('dragover');
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.target.classList.remove('dragover');
   };
 
   const handleSubmit = async (event) => {
@@ -118,7 +177,7 @@ function App() {
     setLoading(true);
     setError(null);
     setQuestions([]);
-    setSelectedAnswers({});
+    setUserAnswers({});
     setScore(null);
     setSubmitted(false);
 
@@ -127,7 +186,7 @@ function App() {
     formData.append('questionType', questionType);
 
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'exam-gen-backend.vercel.app';
+      const baseUrl = process.env.REACT_APP_API_URL || 'https://exam-gen-backend.vercel.app';
       const apiUrl = baseUrl.replace(/\/+$/, '');
       
       const response = await axios.post(`${apiUrl}/upload`, formData, {
@@ -139,13 +198,13 @@ function App() {
 
       setQuestions(response.data.questions);
       if (response.data.rate_limit) {
-        setRateLimit(response.data.rate_limit);
+        setRateLimitInfo(response.data.rate_limit);
       }
     } catch (err) {
       if (err.response?.status === 429) {
         // Rate limit exceeded
         setError(`${err.response.data.message}`);
-        setRateLimit(err.response.data.rate_limit);
+        setRateLimitInfo(err.response.data.rate_limit);
       } else {
         console.error('Error:', err);
         setError(err.response?.data?.error || 'An error occurred while processing your request');
@@ -156,7 +215,7 @@ function App() {
   };
 
   const handleAnswerChange = (questionIndex, value) => {
-    setSelectedAnswers(prev => ({
+    setUserAnswers(prev => ({
       ...prev,
       [questionIndex]: value
     }));
@@ -182,12 +241,12 @@ function App() {
   const calculateScore = () => {
     let correctCount = 0;
     questions.forEach((question, index) => {
-      const isCorrect = isAnswerCorrect(question, selectedAnswers[index]);
+      const isCorrect = isAnswerCorrect(question, userAnswers[index]);
       if (isCorrect) {
         correctCount++;
       }
       console.log('Question:', question.question);
-      console.log('User Answer:', selectedAnswers[index]);
+      console.log('User Answer:', userAnswers[index]);
       console.log('Correct Answer:', question.correct_answer);
       console.log('Is Correct:', isCorrect);
     });
@@ -296,7 +355,11 @@ function App() {
                 id="file-upload"
               />
               <label htmlFor="file-upload">
-                <UploadZone>
+                <UploadZone
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                >
                   <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
                   <Typography variant="h6" sx={{ mb: 1 }}>
                     Drop your PDF here or click to browse
@@ -309,7 +372,7 @@ function App() {
                 </UploadZone>
               </label>
 
-              <Button
+              <StyledButton
                 variant="contained"
                 fullWidth
                 onClick={handleSubmit}
@@ -317,7 +380,7 @@ function App() {
                 sx={{ mt: 2, height: 48 }}
               >
                 {loading ? <CircularProgress size={24} color="inherit" /> : 'Generate Questions'}
-              </Button>
+              </StyledButton>
             </Box>
 
             <Snackbar 
@@ -331,10 +394,10 @@ function App() {
               </Alert>
             </Snackbar>
 
-            {rateLimit && (
+            {rateLimitInfo && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                You have {rateLimit.remaining} questions generations remaining today. 
-                Resets at {new Date(rateLimit.reset_time).toLocaleString()}
+                You have {rateLimitInfo.remaining} questions generations remaining today. 
+                Resets at {new Date(rateLimitInfo.reset_time).toLocaleString()}
               </Alert>
             )}
 
@@ -353,7 +416,7 @@ function App() {
                             fullWidth
                             variant="outlined"
                             placeholder="Type your answer here"
-                            value={selectedAnswers[index] || ''}
+                            value={userAnswers[index] || ''}
                             onChange={(e) => handleAnswerChange(index, e.target.value)}
                             disabled={submitted}
                             sx={{ mb: 2 }}
@@ -365,7 +428,7 @@ function App() {
                               borderRadius: 1,
                               bgcolor: 'background.paper',
                               border: 1,
-                              borderColor: isAnswerCorrect(question, selectedAnswers[index])
+                              borderColor: isAnswerCorrect(question, userAnswers[index])
                                 ? 'success.main'
                                 : 'error.main'
                             }}>
@@ -376,13 +439,13 @@ function App() {
                                 <Typography
                                   variant="body1"
                                   sx={{
-                                    color: isAnswerCorrect(question, selectedAnswers[index])
+                                    color: isAnswerCorrect(question, userAnswers[index])
                                       ? 'success.main'
                                       : 'error.main'
                                   }}
                                 >
-                                  {selectedAnswers[index] || '(No answer provided)'}
-                                  {isAnswerCorrect(question, selectedAnswers[index]) ? (
+                                  {userAnswers[index] || '(No answer provided)'}
+                                  {isAnswerCorrect(question, userAnswers[index]) ? (
                                     <Check sx={{ ml: 1, verticalAlign: 'middle' }} color="success" />
                                   ) : (
                                     <Clear sx={{ ml: 1, verticalAlign: 'middle' }} color="error" />
@@ -404,7 +467,7 @@ function App() {
                         <Box>
                           <FormControl component="fieldset" fullWidth>
                             <RadioGroup
-                              value={selectedAnswers[index] || ''}
+                              value={userAnswers[index] || ''}
                               onChange={(e) => handleAnswerChange(index, e.target.value)}
                             >
                               {question.options?.map((option, optIndex) => {
@@ -426,7 +489,7 @@ function App() {
                                       ...(submitted && {
                                         bgcolor: isCorrect
                                           ? 'success.light'
-                                          : selectedAnswers[index] === option
+                                          : userAnswers[index] === option
                                             ? 'error.light'
                                             : 'transparent'
                                       })
@@ -448,7 +511,7 @@ function App() {
                                       {submitted && (
                                         isCorrect ? (
                                           <Check color="success" />
-                                        ) : selectedAnswers[index] === option ? (
+                                        ) : userAnswers[index] === option ? (
                                           <Clear color="error" />
                                         ) : null
                                       )}
@@ -466,7 +529,7 @@ function App() {
                               )})}
                             </RadioGroup>
                           </FormControl>
-                          {submitted && !isAnswerCorrect(question, selectedAnswers[index]) && (
+                          {submitted && !isAnswerCorrect(question, userAnswers[index]) && (
                             <Box sx={{ 
                               mt: 2,
                               p: 2,
@@ -488,14 +551,14 @@ function App() {
                 ))}
 
                 <Box sx={{ textAlign: 'center', mt: 4 }}>
-                  <Button
+                  <StyledButton
                     variant="contained"
                     onClick={calculateScore}
-                    disabled={Object.keys(selectedAnswers).length !== questions.length || submitted}
+                    disabled={Object.keys(userAnswers).length !== questions.length || submitted}
                     sx={{ minWidth: 200 }}
                   >
                     Submit Answers
-                  </Button>
+                  </StyledButton>
 
                   {score !== null && (
                     <Paper 
