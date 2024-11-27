@@ -127,7 +127,7 @@ function App() {
     formData.append('questionType', questionType);
 
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'https://exam-generator-backend.vercel.app';
+      const baseUrl = process.env.REACT_APP_API_URL || 'https://backend-ofdhzw90n-hireable.vercel.app';
       const apiUrl = baseUrl.replace(/\/+$/, '');
       
       const response = await axios.post(`${apiUrl}/upload`, formData, {
