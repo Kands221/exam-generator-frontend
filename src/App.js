@@ -152,17 +152,18 @@ function App() {
   };
 
   const isAnswerCorrect = (question, userAnswer) => {
-    if (!userAnswer || !question.correct_answer) return false;
+    if (!userAnswer || !question?.correct_answer) return false;
     
     if (question.type === 'fill_in_blank') {
       return userAnswer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
     } else if (question.type === 'multiple_choice' || question.type === 'identification') {
       // Get the index of the selected answer (0 for first option, 1 for second, etc.)
-      const selectedIndex = question.options.findIndex(option => option === userAnswer);
+      const selectedIndex = question.options?.findIndex(option => option === userAnswer) ?? -1;
+      if (selectedIndex === -1) return false;
       // Convert index to letter (0 -> 'A', 1 -> 'B', etc.)
       const selectedLetter = String.fromCharCode(65 + selectedIndex);
       // Compare with correct answer letter
-      return question.correct_answer.trim() === selectedLetter;
+      return question.correct_answer?.trim() === selectedLetter;
     }
     return false;
   };
@@ -390,7 +391,7 @@ function App() {
                             >
                               {question.options?.map((option, optIndex) => {
                                 const optionLetter = String.fromCharCode(65 + optIndex);
-                                const isCorrect = optionLetter === question.correct_answer.trim();
+                                const isCorrect = question.correct_answer?.trim() === optionLetter;
                                 return (
                                 <FormControlLabel
                                   key={optIndex}
