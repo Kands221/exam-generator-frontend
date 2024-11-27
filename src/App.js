@@ -95,6 +95,7 @@ function App() {
   const [score, setScore] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [questionType, setQuestionType] = useState('multiple_choice');
+  const [rateLimit, setRateLimit] = useState(null);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -116,6 +117,10 @@ function App() {
 
     setLoading(true);
     setError(null);
+    setQuestions([]);
+    setSelectedAnswers({});
+    setScore(null);
+    setSubmitted(false);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -133,12 +138,18 @@ function App() {
       });
 
       setQuestions(response.data.questions);
-      setSelectedAnswers({});
-      setScore(null);
-      setSubmitted(false);
-    } catch (error) {
-      console.error('Error:', error);
-      setError(error.response?.data?.error || 'An error occurred while processing your request');
+      if (response.data.rate_limit) {
+        setRateLimit(response.data.rate_limit);
+      }
+    } catch (err) {
+      if (err.response?.status === 429) {
+        // Rate limit exceeded
+        setError(`${err.response.data.message}`);
+        setRateLimit(err.response.data.rate_limit);
+      } else {
+        console.error('Error:', err);
+        setError(err.response?.data?.error || 'An error occurred while processing your request');
+      }
     } finally {
       setLoading(false);
     }
@@ -319,6 +330,13 @@ function App() {
                 {error}
               </Alert>
             </Snackbar>
+
+            {rateLimit && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                You have {rateLimit.remaining} questions generations remaining today. 
+                Resets at {new Date(rateLimit.reset_time).toLocaleString()}
+              </Alert>
+            )}
 
             {questions.length > 0 && (
               <Box sx={{ mt: 4 }}>
