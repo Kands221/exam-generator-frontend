@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { 
-  Container, 
-  Paper, 
-  Typography, 
-  Button, 
+import {
   Box,
+  Container,
+  Paper,
+  Typography,
+  Button,
   CircularProgress,
   List,
   ListItem,
   ListItemText,
-  Radio,
+  FormControl,
   RadioGroup,
   FormControlLabel,
-  Alert
+  Radio,
+  Snackbar,
+  Alert,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -30,12 +34,22 @@ const VisuallyHiddenInput = styled('input')`
   width: 1px;
 `;
 
+const StyledPaper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(4),
+  marginTop: theme.spacing(4),
+  marginBottom: theme.spacing(4),
+  borderRadius: '12px',
+  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.2)',
+}));
+
 function App() {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [score, setScore] = useState(null);
+  const [showScore, setShowScore] = useState(false);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -43,8 +57,8 @@ function App() {
       setFile(selectedFile);
       setError('');
     } else {
-      setError('Please select a PDF file');
       setFile(null);
+      setError('Please select a valid PDF file');
     }
   };
 
@@ -55,113 +69,156 @@ function App() {
     }
 
     setLoading(true);
-    setError('');
+    setQuestions([]);
+    setScore(null);
+    setShowScore(false);
 
     const formData = new FormData();
     formData.append('file', file);
 
-    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
     try {
-      const response = await axios.post(`${API_URL}/upload`, formData, {
+      const response = await axios.post(process.env.REACT_APP_API_URL + '/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-
-      // The questions are now already in JSON format, no need to parse
       setQuestions(response.data.questions);
     } catch (err) {
-      setError(err.response?.data?.error || 'An error occurred while processing your file');
+      setError('Error generating questions. Please try again.');
+      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAnswerChange = (questionIndex, value) => {
+  const handleAnswerChange = (questionIndex, answer) => {
     setSelectedAnswers(prev => ({
       ...prev,
-      [questionIndex]: value
+      [questionIndex]: answer
     }));
   };
 
-  return (
-    <Container maxWidth="md">
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
-          PDF Exam Generator
-        </Typography>
+  const calculateScore = () => {
+    let correctAnswers = 0;
+    questions.forEach((question, index) => {
+      if (selectedAnswers[index] === question.correct_answer) {
+        correctAnswers++;
+      }
+    });
+    setScore((correctAnswers / questions.length) * 100);
+    setShowScore(true);
+  };
 
-        <Paper sx={{ p: 3, mb: 3 }}>
+  return (
+    <Box sx={{ flexGrow: 1 }}>
+      <AppBar position="static" sx={{ backgroundColor: '#1a237e' }}>
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            AI Exam Generator
+          </Typography>
+        </Toolbar>
+      </AppBar>
+
+      <Container maxWidth="md">
+        <StyledPaper elevation={3}>
+          <Typography variant="h5" gutterBottom align="center" sx={{ mb: 4 }}>
+            Generate Multiple Choice Questions from PDF
+          </Typography>
+
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <Button
               component="label"
               variant="contained"
               startIcon={<CloudUploadIcon />}
+              sx={{ mb: 2 }}
             >
               Upload PDF
               <VisuallyHiddenInput type="file" onChange={handleFileChange} accept=".pdf" />
             </Button>
+
             {file && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="textSecondary">
                 Selected file: {file.name}
               </Typography>
             )}
+
             <Button
               variant="contained"
-              color="primary"
               onClick={handleSubmit}
               disabled={!file || loading}
+              sx={{ minWidth: 200 }}
             >
-              Generate Questions
+              {loading ? <CircularProgress size={24} /> : 'Generate Questions'}
             </Button>
           </Box>
-        </Paper>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
+        </StyledPaper>
 
         {questions.length > 0 && (
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Generated Questions
+          <StyledPaper elevation={3}>
+            <Typography variant="h6" gutterBottom>
+              Questions
             </Typography>
             <List>
-              {questions.map((q, index) => (
-                <ListItem key={index} sx={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              {questions.map((question, index) => (
+                <ListItem key={index} sx={{ flexDirection: 'column', alignItems: 'flex-start', mb: 3 }}>
                   <ListItemText
-                    primary={`${index + 1}. ${q.question}`}
-                    sx={{ mb: 1 }}
+                    primary={`${index + 1}. ${question.question}`}
+                    sx={{ mb: 2 }}
                   />
-                  <RadioGroup
-                    value={selectedAnswers[index] || ''}
-                    onChange={(e) => handleAnswerChange(index, e.target.value)}
-                  >
-                    {q.options.map((option, optIndex) => (
-                      <FormControlLabel
-                        key={optIndex}
-                        value={option.charAt(0)}
-                        control={<Radio />}
-                        label={option}
-                      />
-                    ))}
-                  </RadioGroup>
+                  <FormControl component="fieldset">
+                    <RadioGroup
+                      value={selectedAnswers[index] || ''}
+                      onChange={(e) => handleAnswerChange(index, e.target.value)}
+                    >
+                      {question.options.map((option, optIndex) => (
+                        <FormControlLabel
+                          key={optIndex}
+                          value={option.split(') ')[0]}
+                          control={<Radio />}
+                          label={option}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
                 </ListItem>
               ))}
             </List>
-          </Paper>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={calculateScore}
+                disabled={Object.keys(selectedAnswers).length !== questions.length}
+              >
+                Submit Answers
+              </Button>
+            </Box>
+          </StyledPaper>
         )}
-      </Box>
-    </Container>
+
+        {showScore && (
+          <StyledPaper elevation={3}>
+            <Typography variant="h6" align="center" gutterBottom>
+              Your Score
+            </Typography>
+            <Typography variant="h4" align="center" color="primary">
+              {score.toFixed(1)}%
+            </Typography>
+          </StyledPaper>
+        )}
+
+        <Snackbar
+          open={!!error}
+          autoHideDuration={6000}
+          onClose={() => setError('')}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setError('')} severity="error" sx={{ width: '100%' }}>
+            {error}
+          </Alert>
+        </Snackbar>
+      </Container>
+    </Box>
   );
 }
 
