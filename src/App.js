@@ -77,15 +77,30 @@ function App() {
     formData.append('file', file);
 
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/upload`, formData, {
+      // Use default URL if environment variable is not set
+      const baseUrl = process.env.REACT_APP_API_URL || 'https://exam-generator-backend.vercel.app';
+      const apiUrl = baseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+      
+      console.log('Using API URL:', apiUrl); // Debug log
+      
+      const response = await axios.post(`${apiUrl}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        withCredentials: true
       });
-      setQuestions(response.data.questions);
+
+      console.log('API Response:', response.data); // Debug log
+
+      if (response.data && Array.isArray(response.data.questions)) {
+        setQuestions(response.data.questions);
+      } else {
+        console.error('Invalid response format:', response.data);
+        setError('Invalid response format from server');
+      }
     } catch (err) {
-      setError('Error generating questions. Please try again.');
-      console.error('Error:', err);
+      console.error('Error details:', err.response || err);
+      setError(err.response?.data?.error || 'Error generating questions. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -153,10 +168,16 @@ function App() {
           </Box>
         </StyledPaper>
 
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
         {questions.length > 0 && (
           <StyledPaper elevation={3}>
             <Typography variant="h6" gutterBottom>
-              Questions
+              Generated Questions
             </Typography>
             <List>
               {questions.map((question, index) => (
@@ -165,7 +186,7 @@ function App() {
                     primary={`${index + 1}. ${question.question}`}
                     sx={{ mb: 2 }}
                   />
-                  <FormControl component="fieldset">
+                  <FormControl component="fieldset" sx={{ width: '100%' }}>
                     <RadioGroup
                       value={selectedAnswers[index] || ''}
                       onChange={(e) => handleAnswerChange(index, e.target.value)}
@@ -176,6 +197,7 @@ function App() {
                           value={option.split(') ')[0]}
                           control={<Radio />}
                           label={option}
+                          sx={{ marginLeft: 2 }}
                         />
                       ))}
                     </RadioGroup>
@@ -183,16 +205,18 @@ function App() {
                 </ListItem>
               ))}
             </List>
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={calculateScore}
-                disabled={Object.keys(selectedAnswers).length !== questions.length}
-              >
-                Submit Answers
-              </Button>
-            </Box>
+            {questions.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={calculateScore}
+                  disabled={Object.keys(selectedAnswers).length !== questions.length}
+                >
+                  Submit Answers
+                </Button>
+              </Box>
+            )}
           </StyledPaper>
         )}
 
